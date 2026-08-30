@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>HeatShield AI</title>
+
+    <link rel="stylesheet"
+          href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background: #f4f6f8;
+        }
+
+        header {
+            background: #1f2937;
+            color: white;
+            padding: 18px 25px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        #map {
+            height: 600px;
+            width: 100%;
+        }
+
+        .info {
+            padding: 15px 25px;
+            background: white;
+        }
+
+        #dashboard {
+            position: absolute;
+            top: 125px;
+            right: 20px;
+            z-index: 1000;
+            width: 240px;
+            background: white;
+            padding: 16px;
+            border-radius: 10px;
+            box-shadow: 0 3px 15px rgba(0,0,0,0.25);
+        }
+
+        #dashboard h2 {
+            margin: 0 0 12px 0;
+            font-size: 18px;
+        }
+
+        .filter-label {
+            display: block;
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 6px;
+        }
+
+        #assetTypeFilter,
+        #riskFilter {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            background: white;
+            font-size: 14px;
+        }
+
+        .stat-card {
+            background: #f4f6f8;
+            margin: 8px 0;
+            padding: 10px;
+            border-radius: 7px;
+        }
+
+        .stat-card span {
+            display: block;
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+
+        .stat-card strong {
+            font-size: 22px;
+        }
+
+        .ai-button {
+            margin-top: 10px;
+            padding: 9px 12px;
+            width: 100%;
+            border: none;
+            border-radius: 6px;
+            background: #1f2937;
+            color: white;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        .ai-button:hover {
+            background: #374151;
+        }
+
+        .ai-result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f4f6f8;
+            border-radius: 7px;
+            line-height: 1.4;
+        }
+
+        .legend {
+            background: white;
+            padding: 10px;
+            line-height: 22px;
+            border-radius: 5px;
+            box-shadow: 0 0 8px rgba(0,0,0,0.25);
+        }
+
+        .legend i {
+            width: 18px;
+            height: 18px;
+            float: left;
+            margin-right: 8px;
+        }
+
+    </style>
+</head>
+
+<body>
+
+<header>
+
+    <h1>🔥 HeatShield AI</h1>
+
+    <div>
+        Public Space Heat Safety Intelligence
+    </div>
+
+</header>
+
+
+<div class="info">
+
+    <b>Study Area:</b>
+    Jersey City, New Jersey |
+
+    <b>Public Assets:</b>
+    <span id="infoTotalAssets">578</span> |
+
+    <b>FortyGuard Heat Tiles:</b>
+    1,024
+
+</div>
+
+
+<!-- ------------------------------------
+     HEAT RISK DASHBOARD
+------------------------------------- -->
+
+<div id="dashboard">
+
+    <h2>🔥 Heat Risk Dashboard</h2>
+
+
+    <label
+        class="filter-label"
+        for="assetTypeFilter"
+    >
+        Asset Type
+    </label>
+
+
+    <select id="assetTypeFilter">
+
+        <option value="All">
+            All Assets
+        </option>
+
+    </select>
+
+
+    <label
+        class="filter-label"
+        for="riskFilter"
+    >
+        Risk View
+    </label>
+
+
+    <select id="riskFilter">
+
+        <option value="All">
+            All Risk Levels
+        </option>
+
+        <option value="High">
+            🔴 High Risk Only
+        </option>
+
+        <option value="Extreme">
+            🟣 Extreme Risk Only
+        </option>
+
+        <option value="HighExtreme">
+            🔥 High + Extreme
+        </option>
+
+    </select>
+
+
+    <div class="stat-card">
+
+        <span>
+            Total Public Assets
+        </span>
+
+        <strong id="totalAssets">
+            578
+        </strong>
+
+    </div>
+
+
+    <div class="stat-card">
+
+        <span>
+            High Risk
+        </span>
+
+        <strong id="highRisk">
+            —
+        </strong>
+
+    </div>
+
+
+    <div class="stat-card">
+
+        <span>
+            Moderate Risk
+        </span>
+
+        <strong id="moderateRisk">
+            —
+        </strong>
+
+    </div>
+
+
+    <div class="stat-card">
+
+        <span>
+            Extreme Risk
+        </span>
+
+        <strong id="extremeRisk">
+            —
+        </strong>
+
+    </div>
+
+</div>
+
+
+<div id="map"></div>
+
+
+<script>
+
+
+// ------------------------------------
+// MAP
+// ------------------------------------
+
+const map =
+    L.map("map");
+
+
+L.tileLayer(
+    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    {
+        attribution:
+            "&copy; OpenStreetMap contributors"
+    }
+).addTo(map);
+
+
+// ------------------------------------
+// TEMPERATURE COLOR
+// ------------------------------------
+
+function getHeatColor(temp) {
+
+    if (temp >= 35) {
+        return "#800026";
+    }
+
+    if (temp >= 33) {
+        return "#e31a1c";
+    }
+
+    if (temp >= 32) {
+        return "#fd8d3c";
+    }
+
+    if (temp >= 30) {
+        return "#feb24c";
+    }
+
+    return "#31a354";
+}
+
+
+// ------------------------------------
+// LOAD HEATMAP
+// ------------------------------------
+
+async function loadHeatmap() {
+
+    const response =
+        await fetch(
+            "data/heatmap.geojson"
+        );
+
+
+    if (!response.ok) {
+
+        throw new Error(
+            "Could not load heatmap.geojson"
+        );
+    }
+
+
+    const heatmap =
+        await response.json();
+
+
+    console.log(
+        "Heatmap loaded:",
+        heatmap.features.length
+    );
+
+
+    const heatLayer =
+        L.geoJSON(
+            heatmap,
+            {
+
+                style:
+                    function(feature) {
+
+                        const temp =
+                            Number(
+                                feature
+                                    .properties
+                                    .average_temperature
+                            );
+
+
+                        return {
+
+                            fillColor:
+                                getHeatColor(temp),
+
+                            color:
+                                "#ffffff",
+
+                            weight:
+                                0.4,
+
+                            fillOpacity:
+                                0.45
+
+                        };
+
+                    },
+
+
+                onEachFeature:
+                    function(feature, layer) {
+
+                        const temp =
+                            Number(
+                                feature
+                                    .properties
+                                    .average_temperature
+                            );
+
+
+                        layer.bindPopup(
+
+                            "<b>FortyGuard Heat Tile</b><br>" +
+
+                            "Temperature: " +
+                            temp.toFixed(2) +
+                            " °C<br>" +
+
+                            "Minimum: " +
+                            Number(
+                                feature
+                                    .properties
+                                    .min_temperature
+                            ).toFixed(2) +
+                            " °C<br>" +
+
+                            "Maximum: " +
+                            Number(
+                                feature
+                                    .properties
+                                    .max_temperature
+                            ).toFixed(2) +
+                            " °C"
+
+                        );
+
+                    }
+
+            }
+
+        ).addTo(map);
+
+
+    return heatLayer;
+}
+
+
+// ------------------------------------
+// PUBLIC ASSET VARIABLES
+// ------------------------------------
+
+let allAssets = [];
+
+let assetLayer =
+    L.layerGroup();
+
+
+// ------------------------------------
+// UPDATE DASHBOARD
+// ------------------------------------
+
+function updateDashboard(features) {
+
+    let highRisk = 0;
+
+    let moderateRisk = 0;
+
+    let extremeRisk = 0;
+
+
+    features.forEach(
+        function(feature) {
+
+            const risk =
+                feature
+                    .properties
+                    .heat_risk;
+
+
+            if (risk === "High") {
+
+                highRisk++;
+
+            }
+
+            else if (risk === "Moderate") {
+
+                moderateRisk++;
+
+            }
+
+            else if (risk === "Extreme") {
+
+                extremeRisk++;
+
+            }
+
+        }
+    );
+
+
+    document.getElementById(
+        "totalAssets"
+    ).textContent =
+        features.length;
+
+
+    document.getElementById(
+        "infoTotalAssets"
+    ).textContent =
+        features.length;
+
+
+    document.getElementById(
+        "highRisk"
+    ).textContent =
+        highRisk;
+
+
+    document.getElementById(
+        "moderateRisk"
+    ).textContent =
+        moderateRisk;
+
+
+    document.getElementById(
+        "extremeRisk"
+    ).textContent =
+        extremeRisk;
+}
+
+
+// ------------------------------------
+// AI RECOMMENDATION REQUEST
+// ------------------------------------
+
+async function generateAIRecommendation(
+    assetType,
+    temperature,
+    risk,
+    resultElement,
+    buttonElement
+) {
+
+    buttonElement.disabled = true;
+
+    buttonElement.textContent =
+        "🤖 Generating...";
+
+
+    resultElement.innerHTML =
+        "<i>Generating AI recommendation...</i>";
+
+
+    try {
+
+        const response =
+            await fetch(
+                "/api/recommendation",
+                {
+
+                    method:
+                        "POST",
+
+                    headers:
+                        {
+                            "Content-Type":
+                                "application/json"
+                        },
+
+                    body:
+                        JSON.stringify(
+                            {
+                                asset_type:
+                                    assetType,
+
+                                temperature:
+                                    temperature,
+
+                                risk:
+                                    risk
+                            }
+                        )
+
+                }
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                "AI server returned an error."
+            );
+        }
+
+
+        const data =
+            await response.json();
+
+
+        if (!data.success) {
+
+            throw new Error(
+                data.error ||
+                "AI recommendation failed."
+            );
+        }
+
+
+        resultElement.innerHTML =
+            "<b>🔥 HeatShield AI Recommendation</b><br><br>" +
+            data.recommendation;
+
+
+        buttonElement.textContent =
+            "🤖 Generate Again";
+
+    }
+
+    catch (error) {
+
+        console.error(error);
+
+
+        resultElement.innerHTML =
+            "<b>⚠️ AI Recommendation Error</b><br><br>" +
+            error.message;
+
+        buttonElement.textContent =
+            "🤖 Try Again";
+
+    }
+
+    finally {
+
+        buttonElement.disabled =
+            false;
+
+    }
+}
+
+
+// ------------------------------------
+// DISPLAY ASSETS
+// ------------------------------------
+
+function displayAssets(features) {
+
+    assetLayer.clearLayers();
+
+
+    features.forEach(
+        function(feature) {
+
+            if (
+                !feature.geometry ||
+                feature.geometry.type !== "Point"
+            ) {
+
+                return;
+
+            }
+
+
+            const coordinates =
+                feature.geometry.coordinates;
+
+
+            const lon =
+                Number(
+                    coordinates[0]
+                );
+
+
+            const lat =
+                Number(
+                    coordinates[1]
+                );
+
+
+            const properties =
+                feature.properties;
+
+
+            const temperature =
+                Number(
+                    properties.temperature_c
+                );
+
+
+            let color =
+                "#31a354";
+
+
+            if (
+                properties.heat_risk ===
+                "Extreme"
+            ) {
+
+                color =
+                    "#800026";
+
+            }
+
+            else if (
+                properties.heat_risk ===
+                "High"
+            ) {
+
+                color =
+                    "#e31a1c";
+
+            }
+
+            else if (
+                properties.heat_risk ===
+                "Moderate"
+            ) {
+
+                color =
+                    "#fd8d3c";
+
+            }
+
+
+            const marker =
+                L.circleMarker(
+                    [lat, lon],
+                    {
+
+                        radius:
+                            6,
+
+                        fillColor:
+                            color,
+
+                        color:
+                            "#222222",
+
+                        weight:
+                            1,
+
+                        fillOpacity:
+                            0.95
+
+                    }
+                );
+
+
+            const popupContent =
+                document.createElement(
+                    "div"
+                );
+
+
+            popupContent.innerHTML =
+
+                "<b>" +
+
+                (
+                    properties.name ||
+                    "Public Asset"
+                ) +
+
+                "</b><br>" +
+
+                "Type: " +
+
+                (
+                    properties.asset_type ||
+                    "Unknown"
+                ) +
+
+                "<br>" +
+
+                "Temperature: " +
+
+                temperature.toFixed(2) +
+
+                " °C<br>" +
+
+                "Heat Risk: <b>" +
+
+                (
+                    properties.heat_risk ||
+                    "Unknown"
+                ) +
+
+                "</b><br><br>";
+
+
+            const aiButton =
+                document.createElement(
+                    "button"
+                );
+
+
+            aiButton.className =
+                "ai-button";
+
+
+            aiButton.textContent =
+                "🤖 Generate AI Recommendation";
+
+
+            const aiResult =
+                document.createElement(
+                    "div"
+                );
+
+
+            aiResult.className =
+                "ai-result";
+
+
+            aiResult.style.display =
+                "none";
+
+
+            aiButton.addEventListener(
+                "click",
+                function() {
+
+                    aiResult.style.display =
+                        "block";
+
+
+                    generateAIRecommendation(
+
+                        properties.asset_type ||
+                            "Public Asset",
+
+                        temperature,
+
+                        properties.heat_risk ||
+                            "Unknown",
+
+                        aiResult,
+
+                        aiButton
+
+                    );
+
+                }
+            );
+
+
+            popupContent.appendChild(
+                aiButton
+            );
+
+
+            popupContent.appendChild(
+                aiResult
+            );
+
+
+            marker.bindPopup(
+                popupContent
+            );
+
+
+            marker.addTo(
+                assetLayer
+            );
+
+        }
+    );
+
+
+    updateDashboard(features);
+}
+
+
+// ------------------------------------
+// APPLY FILTERS
+// ------------------------------------
+
+function applyFilters() {
+
+    const selectedType =
+        document.getElementById(
+            "assetTypeFilter"
+        ).value;
+
+
+    const selectedRisk =
+        document.getElementById(
+            "riskFilter"
+        ).value;
+
+
+    let filteredAssets =
+        allAssets;
+
+
+    // Asset type filter
+
+    if (
+        selectedType !==
+        "All"
+    ) {
+
+        filteredAssets =
+            filteredAssets.filter(
+                function(feature) {
+
+                    return (
+                        feature.properties
+                            .asset_type ===
+                        selectedType
+                    );
+
+                }
+            );
+
+    }
+
+
+    // High risk
+
+    if (
+        selectedRisk ===
+        "High"
+    ) {
+
+        filteredAssets =
+            filteredAssets.filter(
+                function(feature) {
+
+                    return (
+                        feature.properties
+                            .heat_risk ===
+                        "High"
+                    );
+
+                }
+            );
+
+    }
+
+
+    // Extreme risk
+
+    else if (
+        selectedRisk ===
+        "Extreme"
+    ) {
+
+        filteredAssets =
+            filteredAssets.filter(
+                function(feature) {
+
+                    return (
+                        feature.properties
+                            .heat_risk ===
+                        "Extreme"
+                    );
+
+                }
+            );
+
+    }
+
+
+    // High + Extreme
+
+    else if (
+        selectedRisk ===
+        "HighExtreme"
+    ) {
+
+        filteredAssets =
+            filteredAssets.filter(
+                function(feature) {
+
+                    return (
+
+                        feature.properties
+                            .heat_risk ===
+                            "High"
+
+                        ||
+
+                        feature.properties
+                            .heat_risk ===
+                            "Extreme"
+
+                    );
+
+                }
+            );
+
+    }
+
+
+    displayAssets(
+        filteredAssets
+    );
+}
+
+
+// ------------------------------------
+// LOAD PUBLIC ASSETS
+// ------------------------------------
+
+async function loadAssets() {
+
+    const response =
+        await fetch(
+            "data/heatshield_assets.geojson"
+        );
+
+
+    if (!response.ok) {
+
+        throw new Error(
+            "Could not load heatshield_assets.geojson"
+        );
+    }
+
+
+    const data =
+        await response.json();
+
+
+    console.log(
+        "Assets loaded:",
+        data.features.length
+    );
+
+
+    allAssets =
+        data.features;
+
+
+    // --------------------------------
+    // CREATE ASSET TYPE OPTIONS
+    // --------------------------------
+
+    const assetTypes =
+        [
+            ...new Set(
+
+                allAssets
+
+                    .map(
+                        function(feature) {
+
+                            return feature
+                                .properties
+                                .asset_type;
+
+                        }
+                    )
+
+                    .filter(Boolean)
+
+            )
+        ];
+
+
+    assetTypes.sort();
+
+
+    const filter =
+        document.getElementById(
+            "assetTypeFilter"
+        );
+
+
+    assetTypes.forEach(
+        function(type) {
+
+            const option =
+                document.createElement(
+                    "option"
+                );
+
+
+            option.value =
+                type;
+
+
+            option.textContent =
+                type;
+
+
+            filter.appendChild(
+                option
+            );
+
+        }
+    );
+
+
+    assetLayer.addTo(map);
+
+
+    displayAssets(
+        allAssets
+    );
+
+
+    filter.addEventListener(
+        "change",
+        applyFilters
+    );
+
+
+    document.getElementById(
+        "riskFilter"
+    ).addEventListener(
+        "change",
+        applyFilters
+    );
+
+
+    return assetLayer;
+}
+
+
+// ------------------------------------
+// LEGEND
+// ------------------------------------
+
+const legend =
+    L.control(
+        {
+            position:
+                "bottomright"
+        }
+    );
+
+
+legend.onAdd =
+    function() {
+
+        const div =
+            L.DomUtil.create(
+                "div",
+                "legend"
+            );
+
+
+        div.innerHTML =
+
+            "<b>Temperature</b><br>" +
+
+            '<i style="background:#31a354"></i> < 30°C<br>' +
+
+            '<i style="background:#feb24c"></i> 30–32°C<br>' +
+
+            '<i style="background:#fd8d3c"></i> 32–33°C<br>' +
+
+            '<i style="background:#e31a1c"></i> 33–35°C<br>' +
+
+            '<i style="background:#800026"></i> ≥ 35°C';
+
+
+        return div;
+
+    };
+
+
+legend.addTo(map);
+
+
+// ------------------------------------
+// START MAP
+// ------------------------------------
+
+async function startMap() {
+
+    try {
+
+        await loadHeatmap();
+
+        await loadAssets();
+
+
+        map.setView(
+            [40.715, -74.075],
+            13
+        );
+
+
+        console.log(
+            "HeatShield AI loaded successfully."
+        );
+
+    }
+
+    catch (error) {
+
+        console.error(error);
+
+
+        document.querySelector(
+            ".info"
+        ).innerHTML =
+
+            "<b>HeatShield AI Error:</b> " +
+            error.message;
+
+    }
+}
+
+
+startMap();
+
+</script>
+
+</body>
+</html>
